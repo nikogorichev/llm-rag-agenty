@@ -1,13 +1,13 @@
 /**
- * Task 1 — Chat & system prompts 🟢
+ * Задание 1 — Чат и системные промпты 🟢
  *
- * What this teaches:
- *   - How multi-turn chat works: the model never has memory — you send the
- *     full conversation history on every request.
- *   - How the "system" role shapes behaviour without being shown to users.
- *   - Why message ordering matters (system → user → assistant → user …).
+ * Чему учит:
+ *   - Как работает многоходовый чат: у модели нет памяти — на каждый запрос
+ *     вы отправляете всю историю диалога.
+ *   - Как роль "system" задаёт поведение, не показываясь пользователю.
+ *   - Почему важен порядок сообщений (system → user → assistant → user …).
  *
- * How to run:
+ * Запуск:
  *   pnpm tsx modules/02-llm-integration/ts/01-chat.ts
  */
 
@@ -16,24 +16,25 @@ import * as readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 
 // ---------------------------------------------------------------------------
-// TODO 1: Define a system prompt that gives the assistant a persona or scope.
-//         Keep it short (1-3 sentences). Example: "You are a concise, helpful
-//         coding tutor. Explain things simply. When in doubt, show a code snippet."
+// TODO 1: Задайте системный промпт — персона или рамки ответов ассистента.
+//         Коротко (1–3 предложения). Пример: «Ты лаконичный помощник-репетитор
+//         по программированию. Объясняй просто. Если уместно — покажи фрагмент кода.»
 // ---------------------------------------------------------------------------
-const SYSTEM_PROMPT = "TODO: write your system prompt here.";
+const SYSTEM_PROMPT =
+  "Ты помошник, который отвечает на вопросы пользователя в стиле гопника";
 
 async function main() {
   const llm = getProvider();
   console.log(`Using provider: ${llm.name} / model: ${llm.chatModel}\n`);
 
   // ---------------------------------------------------------------------------
-  // TODO 2: Initialise the conversation history.
-  //         The history starts with the system message and grows as the user
-  //         and assistant take turns. Build an array of ChatMessage objects.
-  //         Hint: the system message uses role "system".
+  // TODO 2: Инициализируйте историю диалога.
+  //         Она начинается с системного сообщения и растёт по ходу реплик
+  //         пользователя и ассистента. Соберите массив ChatMessage.
+  //         Подсказка: у системного сообщения role — "system".
   // ---------------------------------------------------------------------------
-  //         Seed it with a single system-role entry carrying SYSTEM_PROMPT.
-  const history: ChatMessage[] = [];
+  //         Заполните массив одним сообщением с role "system" и SYSTEM_PROMPT.
+  const history: ChatMessage[] = [{ role: "system", content: SYSTEM_PROMPT }];
 
   const rl = readline.createInterface({ input, output });
   console.log('Multi-turn chat started. Type "exit" to quit.\n');
@@ -42,28 +43,33 @@ async function main() {
     const userInput = await rl.question("You: ");
     if (userInput.trim().toLowerCase() === "exit") break;
     if (!userInput.trim()) continue;
+    history.push({ role: "user", content: userInput });
+    const resp = await llm.chat(history);
+    history.push({ role: "assistant", content: resp.text });
+    console.log(`Assistant: ${resp.text}`);
 
     // -------------------------------------------------------------------------
-    // TODO 3: Drive one turn of the conversation:
-    //         - Push the user's line onto `history` as a user-role ChatMessage.
-    //         - Call `llm.chat(history)` with the WHOLE history (the model has no
-    //           memory of its own — history IS the memory).
-    //         - Push the reply back onto `history` as an assistant-role message
-    //           so the next turn sees it.
-    //         - Print the reply with an "Assistant: " prefix.
+    // TODO 3: Один ход диалога:
+    //         - Добавьте реплику пользователя в `history` (role: "user").
+    //         - Вызовите `llm.chat(history)` со ВСЕЙ историей (у модели нет своей
+    //           памяти — история и есть память).
+    //         - Добавьте ответ в `history` (role: "assistant"), чтобы следующий
+    //           ход его видел.
+    //         - Выведите ответ с префиксом "Assistant: ".
     // -------------------------------------------------------------------------
 
-    console.log("TODO: implement the chat loop above.\n");
-    break; // remove this once you've implemented the loop
+    // console.log("TODO: реализуйте цикл чата выше.\n");
+    // break; // уберите эту строку, когда реализуете цикл
   }
 
   rl.close();
 
+  console.log(history);
   // ---------------------------------------------------------------------------
-  // TODO 4 (stretch): Print the full conversation history at the end so you
-  //         can see exactly what was sent to the model on the last request.
-  //         Notice how it grows with each turn — this is the "context window"
-  //         filling up. What happens when a long conversation exceeds the limit?
+  // TODO 4 (по желанию): В конце выведите полную историю — то, что ушло в модель
+  //         на последнем запросе. Заметьте, как она растёт с каждым ходом —
+  //         это заполнение «контекстного окна». Что будет, если диалог станет
+  //         длиннее лимита?
   // ---------------------------------------------------------------------------
 }
 

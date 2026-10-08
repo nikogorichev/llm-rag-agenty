@@ -44,7 +44,9 @@ LLM работают с _токенами_, а не со словами. Ток�
 1. Промт, который описывает точную схему.
 2. Парсер (`json.loads` / `JSON.parse`), который обрабатывает markdown-ограждения и другой шум.
 3. Валидатор (Pydantic / Zod), который даёт типизированный объект и перехватывает отсутствующие/неверные поля.
-4. Цикл повторных попыток или исправлений на случай ошибок парсинга.Режим JSON (поддерживается в OpenAI и Ollama) гарантирует валидный вывод JSON, но не фиксирует конкретную схему;
+4. Цикл повторных попыток или исправлений на случай ошибок парсинга.
+
+Режим JSON (поддерживается в OpenAI и Ollama) гарантирует валидный вывод JSON, но не фиксирует конкретную схему;
 ограниченное схемой декодирование (поддерживается некоторыми провайдерами) идёт дальше. Для максимальной переносимости
 экстракция через промпт + валидация через Pydantic/Zod работает везде.
 
@@ -55,13 +57,17 @@ Tool calling требует более сложных структур запр�
 которые не ложатся в универсальную обёртку.
 Это **сделано намеренно**: здесь абстракция «протекает», чтобы вы поняли, _где_ и почему это происходит.
 
-Цикл инструментов:```
+Цикл инструментов:
+
+```
 you → [messages + tool defs] → model
 model → [tool_call: name + args JSON]
 you → execute the tool locally
 you → [messages + tool result] → model
 model → [final text answer]
-```OpenAI и Anthropic используют разные форматы передачи данных (разные ключи JSON, разные роли для результатов инструментов),
+```
+
+OpenAI и Anthropic используют разные форматы передачи данных (разные ключи JSON, разные роли для результатов инструментов),
 но логика цикла одинакова.
 
 ## # Повторы и ошибки
@@ -124,7 +130,9 @@ SDK OpenAI и Anthropic повторяют запросы автоматичес
 
 **Цель:** Подсчитывать токены с помощью tiktoken; построить оценщик стоимости; сравнить модели.
 
-**Шаги:**1. Откройте `py/03_tokens_cost.py` и `ts/03-tokens-cost.ts`.
+**Шаги:**
+
+1. Откройте `py/03_tokens_cost.py` и `ts/03-tokens-cost.ts`.
 2. Реализуйте `count_tokens`, используя tiktoken (Python) или `@dqbd/tiktoken` (TS).
    - Python: `tiktoken.get_encoding("cl100k_base")`.
    - TS: `get_encoding("cl100k_base")` из `@dqbd/tiktoken` — не забудьте вызвать `.free()` у энкодера.
@@ -152,7 +160,7 @@ SDK OpenAI и Anthropic повторяют запросы автоматичес
 2. Изучите схему `Recipe` (модель Pydantic / объект Zod).
 3. Реализуйте `build_prompt` — вставьте описание схемы в системный промпт.
 4. Реализуйте `parse_recipe`:
-   - Уберите Markdown-блоки кода (````json ... ````).
+   - Уберите Markdown-блоки кода (`json ... `).
    - Разобрать JSON.
    - Валидировать через Pydantic `model_validate` / Zod `parse`.
 5. Вызвать LLM с `temperature=0.1`, разобрать результат и вывести его в читаемом формате.
@@ -187,7 +195,9 @@ SDK OpenAI и Anthropic повторяют запросы автоматичес
 > затем нажмите **Start Server**, чтобы адрес `:1234` был доступен; Ollama: сначала выполните `ollama pull llama3.2`.)
 > **Часть B (Anthropic) использует собственный SDK и протокол — локального аналога здесь нет.**
 
-**Шаги:**1. Откройте `py/05_tool_calling.py` и `ts/05-tool-calling.ts`.
+**Шаги:**
+
+1. Откройте `py/05_tool_calling.py` и `ts/05-tool-calling.ts`.
 2. **Часть A (стиль OpenAI):**
    - Заполните `WEATHER_TOOL` / `weatherToolDefinition` JSON-схемой для `get_weather`.
    - Вызовите `client.chat.completions.create(...)` с параметрами `tools` и `tool_choice: "auto"`.
@@ -235,7 +245,9 @@ SDK OpenAI и Anthropic повторяют запросы автоматичес
 
 ---
 
-# # Углубляемся- [OpenAI function calling guide](https://platform.openai.com/docs/guides/function-calling)
+# # Углубляемся
+
+- [OpenAI function calling guide](https://platform.openai.com/docs/guides/function-calling)
 - [Anthropic tool use guide](https://docs.anthropic.com/en/docs/build-with-claude/tool-use)
 - [tiktoken repo](https://github.com/openai/tiktoken) — как работает токенизация BPE (Byte-Pair Encoding)
 - [Zod documentation](https://zod.dev/) — валидация в TypeScript с первичными схемами

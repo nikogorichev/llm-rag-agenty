@@ -19,10 +19,10 @@ const PROMPT = "Explain what a large language model is, in 2 sentences in Russia
 
 const PROVIDERS: ProviderName[] = [
   "openai",
-  // "anthropic",
+  "anthropic",
   "ollama",
-  // "nvidia",
-  // "lmstudio",
+  "nvidia",
+  "lmstudio",
   "gemini",
 ];
 

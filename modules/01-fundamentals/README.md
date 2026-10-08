@@ -18,11 +18,17 @@
 
 > **Задание 1: реализуем BPE с нуля.** Вы обучите слияния на крошечном корпусе, затем выполните `encode` / `decode` и пропустите текст через полный цикл кодирования-декодирования без потерь.
 
-## # 2. Embeddings и векторная похожесть**Эмбеддинг** (embedding) — это вектор фиксированной длины из чисел с плавающей точкой, который представляет собой _смысл_ фрагмента текста. Модель обучается так, чтобы тексты со схожим смыслом располагались близко друг к другу в этом многомерном пространстве. «Как мне сбросить пароль?» и «Я забыл логин» оказываются рядом, а «Кот сел на коврик» — далеко.
+## # 2. Embeddings и векторная похожесть
 
-«Близость» измеряется с помощью **косинусного сходства** (cosine similarity) — косинуса угла между двумя векторами, без учёта их длины:```
+**Эмбеддинг** (embedding) — это вектор фиксированной длины из чисел с плавающей точкой, который представляет собой _смысл_ фрагмента текста. Модель обучается так, чтобы тексты со схожим смыслом располагались близко друг к другу в этом многомерном пространстве. «Как мне сбросить пароль?» и «Я забыл логин» оказываются рядом, а «Кот сел на коврик» — далеко.
+
+«Близость» измеряется с помощью **косинусного сходства** (cosine similarity) — косинуса угла между двумя векторами, без учёта их длины:
+
+```
 cos(a, b) = (a · b) / (‖a‖ · ‖b‖)
-```- `a · b` — это скалярное произведение: `Σ aᵢbᵢ`.
+```
+
+- `a · b` — это скалярное произведение: `Σ aᵢbᵢ`.
 - `‖a‖` — это длина вектора: `√(Σ aᵢ²)`.
 - Результат находится в диапазоне `[-1, 1]`: **1** = одинаковое направление (очень похоже), **0** = ортогональны (не связаны), **-1** = противоположное.
 
@@ -38,9 +44,13 @@ cos(a, b) = (a · b) / (‖a‖ · ‖b‖)
 - **K** (key): что предлагает каждый токен.
 - **V** (value): фактическое содержимое, которое вносит каждый токен.
 
-Выход для токена представляет собой _взвешенное среднее всех V-векторов_, где веса определяются тем, насколько хорошо Q этого токена совпадает с K каждого токена:```
+Выход для токена представляет собой _взвешенное среднее всех V-векторов_, где веса определяются тем, насколько хорошо Q этого токена совпадает с K каждого токена:
+
+```
 Attention(Q, K, V) = softmax( (Q · Kᵀ) / √dₖ ) · V
-```Пошагово, для длины последовательности `n` и размерности головы `dₖ`:
+```
+
+Пошагово, для длины последовательности `n` и размерности головы `dₖ`:
 
 1. `scores = Q @ Kᵀ` → матрица `n × n`; `scores[i][j]` показывает, насколько токен _i_
    обращает внимание на токен _j_ (исходное скалярное произведение).
@@ -75,7 +85,9 @@ Attention(Q, K, V) = softmax( (Q · Kᵀ) / √dₖ ) · V
   из них. Ограничивает глубину падения в «хвост» распределения.
 - **Top-p (nucleus)**: отсортировать по вероятности, оставить наименьший набор, чья суммарная
   вероятность ≥ `p`, перенормировать и сэмплировать. Адаптирует порог отсечения к форме
-  распределения (на уверенном шаге остается мало токенов, на неуверенном — много).На практике их комбинируют (например, `temperature` + `top-p`). Понимание этих механизмов развеивает магию вокруг настроек `temperature` / `top_p`, с которыми вы столкнетесь при каждом вызове API (интерфейса программирования приложений).
+  распределения (на уверенном шаге остается мало токенов, на неуверенном — много).
+
+На практике их комбинируют (например, `temperature` + `top-p`). Понимание этих механизмов развеивает магию вокруг настроек `temperature` / `top_p`, с которыми вы столкнетесь при каждом вызове API (интерфейса программирования приложений).
 
 > **Задание 4 — заглушка.** Реализуйте все четыре метода в `sampling.py` / `sampling.ts`.
 
@@ -91,21 +103,29 @@ Attention(Q, K, V) = softmax( (Q · Kᵀ) / √dₖ ) · V
 
 # # Как запустить
 
-**Python** (из корня репозитория):```bash
+**Python** (из корня репозитория):
+
+```bash
 uv run python modules/01-fundamentals/py/bpe.py        # Task 1 (worked)
 uv run python modules/01-fundamentals/py/cosine.py     # Task 2 (worked, needs a provider for embeddings)
 uv run python modules/01-fundamentals/py/attention.py  # Task 3 (stub — fill in the TODOs)
 uv run python modules/01-fundamentals/py/sampling.py   # Task 4 (stub)
 uv run python modules/01-fundamentals/py/bigram.py     # Task 5 (optional stub)
 uv run pytest modules/01-fundamentals/py/test_fundamentals.py
-```**TypeScript** (из корня репозитория):```bash
+```
+
+**TypeScript** (из корня репозитория):
+
+```bash
 pnpm tsx modules/01-fundamentals/ts/bpe.ts
 pnpm tsx modules/01-fundamentals/ts/cosine.ts
 pnpm tsx modules/01-fundamentals/ts/attention.ts
 pnpm tsx modules/01-fundamentals/ts/sampling.ts
 pnpm tsx modules/01-fundamentals/ts/bigram.ts
 pnpm jest modules/01-fundamentals/ts/bpe.test.ts
-```---
+```
+
+---
 
 # # Задачи
 
@@ -139,7 +159,9 @@ pnpm jest modules/01-fundamentals/ts/bpe.test.ts
 
 **Цель:** реализовать scaled dot-product self-attention.
 
-**Шаги**1. Откройте `attention.py` (numpy) / `attention.ts` (plain arrays).
+**Шаги**
+
+1. Откройте `attention.py` (numpy) / `attention.ts` (plain arrays).
 2. Заполните TODO, используя математику из **Concept 3**: `softmax(QKᵀ/√dₖ)V`.
    Реализуйте численно устойчивый `softmax` (вычитайте максимум в строке).
 3. Запустите файл; заготовка выводит веса внимания и результат, а также проверяет,
@@ -193,7 +215,9 @@ pnpm jest modules/01-fundamentals/ts/bpe.test.ts
 
 ---
 
-# # Углубляемся- **Karpathy — [Let's build GPT (video)](https://www.youtube.com/watch?v=kCc8FmEb1nY)** и **[nanoGPT](https://github.com/karpathy/nanoGPT)** / **[minBPE](https://github.com/karpathy/minbpe)**. Лучший способ усвоить этот модуль.
+# # Углубляемся
+
+- **Karpathy — [Let's build GPT (video)](https://www.youtube.com/watch?v=kCc8FmEb1nY)** и **[nanoGPT](https://github.com/karpathy/nanoGPT)** / **[minBPE](https://github.com/karpathy/minbpe)**. Лучший способ усвоить этот модуль.
 - **3Blue1Brown — [Neural networks series](https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi)** (включая эпизоды про transformer и attention). Лучшая визуальная интуиция.
 - **[The Illustrated Transformer](https://jalammar.github.io/illustrated-transformer/)** — диаграммы для Q/K/V и multi-head attention.
 - **[Hugging Face LLM Course](https://huggingface.co/learn/llm-course)** — токенизаторы, embeddings, transformers: практические занятия.

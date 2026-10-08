@@ -106,7 +106,7 @@ def get_provider(name: str | None = None) -> LLMProvider:
                 "GEMINI_BASE_URL",
                 "https://generativelanguage.googleapis.com/v1beta/openai/",
             ),
-            chat_model=os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash"),
+            chat_model=os.getenv("GEMINI_CHAT_MODEL", "gemini-3.8-flash"),
             embed_model=os.getenv("GEMINI_EMBED_MODEL", "gemini-embedding-001"),
         )
 

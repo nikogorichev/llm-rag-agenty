@@ -96,7 +96,7 @@ export function getProvider(name?: ProviderName): LLMProvider {
         baseURL:
           process.env.GEMINI_BASE_URL ??
           "https://generativelanguage.googleapis.com/v1beta/openai/",
-        chatModel: process.env.GEMINI_CHAT_MODEL ?? "gemini-2.5-flash",
+        chatModel: process.env.GEMINI_CHAT_MODEL ?? "gemini-3.8-flash",
         embedModel: process.env.GEMINI_EMBED_MODEL ?? "gemini-embedding-001",
       });
 

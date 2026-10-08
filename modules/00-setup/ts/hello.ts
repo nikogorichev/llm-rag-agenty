@@ -16,7 +16,7 @@
 
 import { getProvider } from "@learn-ai/llm-core";
 
-const PROMPT = "Explain what a large language model is, in 2 sentences.";
+const PROMPT = "Explain what a large language model is, in 2 sentences in Russian.";
 
 async function main(): Promise<void> {
   // No argument -> use the provider named in LLM_PROVIDER (default: ollama).

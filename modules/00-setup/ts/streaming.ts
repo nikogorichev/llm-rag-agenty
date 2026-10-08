@@ -15,7 +15,7 @@
 import { getProvider } from "@learn-ai/llm-core";
 
 const PROMPT =
-  "In 3 short sentences, explain why streaming output feels faster to a user.";
+  "In 3 short sentences, explain why streaming output feels faster to a user in Russian.";
 
 async function main(): Promise<void> {
   const llm = getProvider();

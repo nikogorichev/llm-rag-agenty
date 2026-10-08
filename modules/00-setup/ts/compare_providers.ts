@@ -15,14 +15,14 @@
 
 import { getProvider, type ProviderName } from "@learn-ai/llm-core";
 
-const PROMPT = "Explain what a large language model is, in 2 sentences.";
+const PROMPT = "Explain what a large language model is, in 2 sentences in Russian.";
 
 const PROVIDERS: ProviderName[] = [
   "openai",
-  "anthropic",
+  // "anthropic",
   "ollama",
-  "nvidia",
-  "lmstudio",
+  // "nvidia",
+  // "lmstudio",
   "gemini",
 ];
 

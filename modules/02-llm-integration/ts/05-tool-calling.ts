@@ -1,41 +1,38 @@
 /**
- * Task 5 — Tool / function calling 🟢
+ * Задание 5 — Tool / function calling 🟢
  *
- * What this teaches:
- *   - The llm_core abstraction only exposes chat/stream/embed. Tool calling
- *     requires richer request shapes (tool definitions, tool_choice, etc.)
- *     that live in the raw provider SDKs. This is WHERE YOU GO BEYOND the
- *     abstraction — and why it exists as a thin wrapper, not a thick one.
- *   - The manual tool loop:
- *       1. Send messages + tool definitions.
- *       2. Model replies with a tool_call (name + arguments JSON).
- *       3. You execute the tool locally.
- *       4. Append a "tool" result message and call the model again.
- *       5. Model uses the result to produce a final text answer.
- *   - OpenAI-style tools (shown here with openai SDK) work identically
- *     for ollama, lmstudio, and nvidia because they implement the same API surface.
- *   - Anthropic uses a different wire format but the same conceptual loop.
+ * Чему учит:
+ *   - В llm_core только chat/stream/embed. Tool calling требует более богатых
+ *     запросов (определения tools, tool_choice и т.д.) — это «сырые» SDK провайдеров.
+ *     Здесь вы выходите ЗА пределы абстракции — и понимаете, зачем она тонкая.
+ *   - Ручной цикл инструментов:
+ *       1. Отправить messages + описания tools.
+ *       2. Модель отвечает tool_call (имя + JSON аргументов).
+ *       3. Вы выполняете tool локально.
+ *       4. Добавляете сообщение с результатом tool и снова вызываете модель.
+ *       5. Модель даёт финальный текстовый ответ.
+ *   - OpenAI-стиль (SDK openai) так же работает для ollama, lmstudio, nvidia —
+ *     тот же формат API.
+ *   - У Anthropic другой wire format, та же логика цикла.
  *
- * How to run:
+ * Запуск:
  *   pnpm tsx modules/02-llm-integration/ts/05-tool-calling.ts
  *
- * Required env (pick one):
+ * Нужен env (один из вариантов):
  *   LLM_PROVIDER=openai    + OPENAI_API_KEY
- *   LLM_PROVIDER=ollama    (local; model must support tools, e.g. llama3.2)
- *   LLM_PROVIDER=lmstudio  (local; load a tool-capable model + Start Server on :1234)
- *   LLM_PROVIDER=anthropic + ANTHROPIC_API_KEY  (see Part B)
+ *   LLM_PROVIDER=ollama    (локально; модель с tools, напр. llama3.2)
+ *   LLM_PROVIDER=lmstudio  (локально; tool-модель + Start Server на :1234)
+ *   LLM_PROVIDER=anthropic + ANTHROPIC_API_KEY  (часть B)
  *
- * Local tool calling (Ollama / LM Studio):
- *   Part A talks raw OpenAI wire format, and both local servers are
- *   OpenAI-compatible — so no code change is needed, only env vars:
+ * Локальный tool calling (Ollama / LM Studio):
+ *   Часть A — сырой OpenAI wire format; оба сервера совместимы — меняются только env:
  *     LM Studio:  LLM_PROVIDER=lmstudio  [LMSTUDIO_BASE_URL=http://localhost:1234/v1]
  *                 [LMSTUDIO_CHAT_MODEL=qwen2.5-7b-instruct]
  *     Ollama:     LLM_PROVIDER=ollama    [OLLAMA_CHAT_MODEL=llama3.2]
- *   CAVEAT: tool calling depends on the *model*, not the server. Pick a
- *   tool-tuned instruct model (Qwen2.5-Instruct, Llama-3.1/3.2-Instruct,
- *   Mistral-Nemo). Small/quantized models often skip the tool call or emit
- *   malformed argument JSON — gate on `message.tool_calls?.length` rather
- *   than trusting finish_reason if a local model misbehaves.
+ *   Важно: tool calling зависит от *модели*, не от сервера. Нужна instruct-модель
+ *   с tools (Qwen2.5-Instruct, Llama-3.1/3.2-Instruct, Mistral-Nemo). Маленькие/
+ *   сильно квантованные модели часто пропускают вызов или ломают JSON аргументов —
+ *   смотрите на `message.tool_calls?.length`, а не только на finish_reason.
  */
 
 import "dotenv/config";
@@ -43,40 +40,47 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 
 // ---------------------------------------------------------------------------
-// Fake tool: get_weather
-// In a real app this would call a weather API. Here we return a hardcoded
-// response so the exercise works without a real API key for weather.
+// Фиктивный tool: get_weather
+// В проде здесь был бы запрос к weather API. Здесь — заглушка без внешнего ключа.
 // ---------------------------------------------------------------------------
-function getWeather(location: string, unit: "celsius" | "fahrenheit" = "celsius"): string {
-  // TODO: make this slightly more interesting — vary by city name so the model
-  //       gets different data for different locations it asks about.
+function getWeather(
+  location: string,
+  unit: "celsius" | "fahrenheit" = "celsius",
+): string {
+  // TODO: сделайте ответ чуть разнообразнее — разные города → разные данные,
+  //       чтобы модель видела разный результат для London и Tokyo.
   const fakeData: Record<string, { temp: number; condition: string }> = {
-    london:    { temp: 15, condition: "cloudy" },
-    tokyo:     { temp: 22, condition: "sunny" },
-    new_york:  { temp: 18, condition: "partly cloudy" },
+    london: { temp: 15, condition: "cloudy" },
+    tokyo: { temp: 22, condition: "sunny" },
+    new_york: { temp: 18, condition: "partly cloudy" },
   };
   const key = location.toLowerCase().replace(/\s+/g, "_");
   const weather = fakeData[key] ?? { temp: 20, condition: "unknown" };
-  const temp = unit === "fahrenheit" ? weather.temp * 9 / 5 + 32 : weather.temp;
-  return JSON.stringify({ location, temperature: temp, unit, condition: weather.condition });
+  const temp = unit === "fahrenheit" ? (weather.temp * 9) / 5 + 32 : weather.temp;
+  return JSON.stringify({
+    location,
+    temperature: temp,
+    unit,
+    condition: weather.condition,
+  });
 }
 
 // ---------------------------------------------------------------------------
-// PART A: OpenAI-style tool calling
-// This works for OpenAI, Ollama (if the model supports tools), and NVIDIA.
+// ЧАСТЬ A: tool calling в стиле OpenAI
+// Работает для OpenAI, Ollama (если модель поддерживает tools), NVIDIA, LM Studio.
 // ---------------------------------------------------------------------------
 
-// TODO 1: Define the tool schema in OpenAI format.
-//         It needs: type "function", function.name, function.description,
-//         function.parameters (JSON Schema object with required fields).
+// TODO 1: Опишите tool в формате OpenAI.
+//         Нужно: type "function", function.name, function.description,
+//         function.parameters (JSON Schema с required).
 const weatherToolDefinition: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: "function",
   function: {
     name: "get_weather",
-    description: "TODO: write a description that helps the model know WHEN to call this",
+    description: "TODO: описание, когда модели вызывать этот tool",
     parameters: {
-      // TODO: fill in the JSON Schema for the parameters
-      // Hint: properties { location: { type: "string" }, unit: { type: "string", enum: [...] } }
+      // TODO: JSON Schema параметров
+      // Подсказка: properties { location: { type: "string" }, unit: { type: "string", enum: [...] } }
       type: "object",
       properties: {},
       required: [],
@@ -87,17 +91,19 @@ const weatherToolDefinition: OpenAI.Chat.Completions.ChatCompletionTool = {
 async function runOpenAIToolLoop(question: string): Promise<void> {
   console.log("=== Part A: OpenAI-style tool calling ===\n");
 
-  // LLM_PROVIDER is the single source of truth: it selects the baseURL, key,
-  // and model together (mirrors @learn-ai/llm-core's config). Part A uses the
-  // raw OpenAI SDK on purpose, so we resolve that config here by hand.
+  // LLM_PROVIDER — единый выбор baseURL, ключа и модели (как в llm-core).
+  // Часть A намеренно на сыром OpenAI SDK — конфиг собираем вручную.
   const provider = process.env.LLM_PROVIDER ?? "ollama";
-  const PROVIDER_CONFIG: Record<string, { apiKey: string; baseURL?: string; model: string }> = {
+  const PROVIDER_CONFIG: Record<
+    string,
+    { apiKey: string; baseURL?: string; model: string }
+  > = {
     openai: {
       apiKey: process.env.OPENAI_API_KEY ?? "",
       model: process.env.OPENAI_CHAT_MODEL ?? "gpt-4o-mini",
     },
     ollama: {
-      apiKey: "ollama", // any non-empty string; local server ignores it
+      apiKey: "ollama", // любая непустая строка; локальный сервер не проверяет
       baseURL: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1",
       model: process.env.OLLAMA_CHAT_MODEL ?? "llama3.2",
     },
@@ -126,34 +132,31 @@ async function runOpenAIToolLoop(question: string): Promise<void> {
   console.log(`Question: ${question}\n`);
 
   // -------------------------------------------------------------------------
-  // TODO 2: Send the initial request. Start a `messages` array (typed
-  //         OpenAI.Chat.Completions.ChatCompletionMessageParam[]) with the user's
-  //         question, then call client.chat.completions.create({ ... }) passing
-  //         `model`, `messages`, your `tools: [weatherToolDefinition]`, and
-  //         tool_choice: "auto". Read the reply off response.choices[0].message
-  //         and inspect response.choices[0].finish_reason.
+  // TODO 2: Первый запрос. Массив `messages` (тип
+  //         OpenAI.Chat.Completions.ChatCompletionMessageParam[]) с вопросом user,
+  //         затем client.chat.completions.create({ ... }) с `model`, `messages`,
+  //         `tools: [weatherToolDefinition]`, tool_choice: "auto".
+  //         Ответ: response.choices[0].message и finish_reason.
   // -------------------------------------------------------------------------
 
   // -------------------------------------------------------------------------
-  // TODO 3: If finish_reason indicates a tool call ("tool_calls"):
-  //         a) Push the assistant message onto `messages` as-is (it holds the
-  //            tool_calls the follow-up must answer).
-  //         b) For each entry in message.tool_calls: JSON.parse its
-  //            function.arguments, call getWeather() with them, and push a
-  //            { role: "tool", tool_call_id, content } message carrying the result
-  //            (tool_call_id must match the call's id so the model pairs them up).
-  //         c) Call the API a second time with the extended `messages`.
-  //         d) Print the final message.content.
-  //         (A robust version would loop until finish_reason is no longer a tool
-  //         call; one round-trip is enough for this exercise.)
+  // TODO 3: Если finish_reason — tool call ("tool_calls"):
+  //         a) Добавить assistant message в `messages` как есть (там tool_calls).
+  //         b) Для каждого message.tool_calls: JSON.parse(function.arguments),
+  //            вызвать getWeather(), добавить { role: "tool", tool_call_id, content }
+  //            (tool_call_id = id вызова, чтобы модель связала пару).
+  //         c) Второй вызов API с расширенным `messages`.
+  //         d) Вывести final message.content.
+  //         (В проде цикл до тех пор, пока не кончатся tool calls; здесь хватит
+  //         одного круга или двух вызовов tool для London + Tokyo.)
   // -------------------------------------------------------------------------
 
-  console.log("TODO: implement the tool loop above.");
+  console.log("TODO: реализуйте цикл tool выше.");
 }
 
 // ---------------------------------------------------------------------------
-// PART B: Anthropic-style tool calling
-// Different wire format, same conceptual loop.
+// ЧАСТЬ B: tool calling в стиле Anthropic
+// Другой wire format, та же идея цикла.
 // ---------------------------------------------------------------------------
 
 async function runAnthropicToolLoop(question: string): Promise<void> {
@@ -167,39 +170,38 @@ async function runAnthropicToolLoop(question: string): Promise<void> {
   console.log(`Question: ${question}\n`);
 
   // -------------------------------------------------------------------------
-  // TODO 4: Define the Anthropic tool (type Anthropic.Tool). Same information as
-  //         the OpenAI one, but the fields are flatter: `name`, `description`, and
-  //         `input_schema` (the JSON Schema object) — no nested "function" wrapper,
-  //         and the schema key is input_schema rather than parameters.
+  // TODO 4: Tool Anthropic (тип Anthropic.Tool). Те же смыслы, что в OpenAI,
+  //         но поля плоские: `name`, `description`, `input_schema` (JSON Schema) —
+  //         без обёртки "function", ключ схемы — input_schema, не parameters.
   // -------------------------------------------------------------------------
 
   // -------------------------------------------------------------------------
-  // TODO 5: Send the initial request.
+  // TODO 5: Первый запрос.
   //         client.messages.create({ model, max_tokens, tools: [tool], messages })
-  //         Check response.stop_reason === "tool_use".
+  //         Проверить response.stop_reason === "tool_use".
   // -------------------------------------------------------------------------
 
   // -------------------------------------------------------------------------
-  // TODO 6: For each content block with type "tool_use":
-  //         - Execute the tool.
-  //         - Append the assistant message (as-is) to the messages array.
-  //         - Append a user message with content = [{ type: "tool_result", tool_use_id, content }].
-  //         - Call the API again and print the final text.
-  //         Anthropic's loop uses alternating user/assistant messages;
-  //         tool results go INSIDE a user message, not as a top-level role.
+  // TODO 6: Для каждого блока content с type "tool_use":
+  //         - выполнить tool;
+  //         - добавить ответ assistant (как есть) в messages;
+  //         - добавить user message с content = [{ type: "tool_result", tool_use_id, content }];
+  //         - снова вызвать API и вывести финальный текст.
+  //         У Anthropic чередуются user/assistant; результаты tool — ВНУТРИ user,
+  //         не отдельная роль "tool" на верхнем уровне.
   // -------------------------------------------------------------------------
 
-  console.log("TODO: implement the Anthropic tool loop above.");
-  console.log("(Skip this part if you don't have an ANTHROPIC_API_KEY)");
+  console.log("TODO: реализуйте цикл Anthropic tool выше.");
+  console.log("(Пропустите часть B, если нет ANTHROPIC_API_KEY)");
 }
 
 async function main() {
   const question = "What's the weather like in London and Tokyo right now?";
 
-  // Run OpenAI-compatible path (also works with ollama)
+  // OpenAI-совместимый путь (также ollama / lmstudio / nvidia)
   await runOpenAIToolLoop(question);
 
-  // Run Anthropic path (requires ANTHROPIC_API_KEY)
+  // Anthropic (нужен ANTHROPIC_API_KEY)
   if (process.env.ANTHROPIC_API_KEY) {
     await runAnthropicToolLoop(question);
   } else {

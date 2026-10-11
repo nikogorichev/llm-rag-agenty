@@ -37,6 +37,7 @@
 
 import "dotenv/config";
 import OpenAI from "openai";
+
 import Anthropic from "@anthropic-ai/sdk";
 
 // ---------------------------------------------------------------------------
@@ -53,6 +54,8 @@ function getWeather(
     london: { temp: 15, condition: "cloudy" },
     tokyo: { temp: 22, condition: "sunny" },
     new_york: { temp: 18, condition: "partly cloudy" },
+    saint_petersburg: { temp: 12, condition: "rainy" },
+    nefteyugansk: { temp: 10, condition: "snowy" },
   };
   const key = location.toLowerCase().replace(/\s+/g, "_");
   const weather = fakeData[key] ?? { temp: 20, condition: "unknown" };
@@ -77,13 +80,20 @@ const weatherToolDefinition: OpenAI.Chat.Completions.ChatCompletionTool = {
   type: "function",
   function: {
     name: "get_weather",
-    description: "TODO: описание, когда модели вызывать этот tool",
+    description: "Get the current weather in a given location",
     parameters: {
       // TODO: JSON Schema параметров
       // Подсказка: properties { location: { type: "string" }, unit: { type: "string", enum: [...] } }
       type: "object",
-      properties: {},
-      required: [],
+      properties: {
+        location: { type: "string", description: "Location to get weather for" },
+        unit: {
+          type: "string",
+          enum: ["celsius", "fahrenheit"],
+          description: "Unit of temperature",
+        },
+      },
+      required: ["location", "unit"],
     },
   },
 };
@@ -101,21 +111,6 @@ async function runOpenAIToolLoop(question: string): Promise<void> {
     openai: {
       apiKey: process.env.OPENAI_API_KEY ?? "",
       model: process.env.OPENAI_CHAT_MODEL ?? "gpt-4o-mini",
-    },
-    ollama: {
-      apiKey: "ollama", // любая непустая строка; локальный сервер не проверяет
-      baseURL: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1",
-      model: process.env.OLLAMA_CHAT_MODEL ?? "llama3.2",
-    },
-    lmstudio: {
-      apiKey: "lm-studio",
-      baseURL: process.env.LMSTUDIO_BASE_URL ?? "http://localhost:1234/v1",
-      model: process.env.LMSTUDIO_CHAT_MODEL ?? "qwen2.5-7b-instruct",
-    },
-    nvidia: {
-      apiKey: process.env.NVIDIA_API_KEY ?? "",
-      baseURL: process.env.NVIDIA_BASE_URL ?? "https://integrate.api.nvidia.com/v1",
-      model: process.env.NVIDIA_CHAT_MODEL ?? "meta/llama-3.1-8b-instruct",
     },
   };
   const config = PROVIDER_CONFIG[provider];
@@ -138,7 +133,51 @@ async function runOpenAIToolLoop(question: string): Promise<void> {
   //         `tools: [weatherToolDefinition]`, tool_choice: "auto".
   //         Ответ: response.choices[0].message и finish_reason.
   // -------------------------------------------------------------------------
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    { role: "developer", content: "You are a helpful assistant." },
+    { role: "user", content: question },
+  ];
 
+  const response = await client.chat.completions.create({
+    messages,
+    model,
+    tools: [weatherToolDefinition],
+    tool_choice: "auto",
+  });
+  console.log(`Message: ${JSON.stringify(response.choices[0].message, null, 2)}`);
+  console.log(`Finish reason: ${response.choices[0].finish_reason}`);
+
+  if (response.choices[0].finish_reason === "tool_calls") {
+    const assistantMessage = response.choices[0].message;
+    messages.push(assistantMessage);
+
+    for (const toolCall of assistantMessage.tool_calls ?? []) {
+      if (toolCall.type !== "function") continue;
+      const args = JSON.parse(toolCall.function.arguments) as {
+        location: string;
+        unit?: "celsius" | "fahrenheit";
+      };
+      const toolCallResult = getWeather(args.location, args.unit);
+      messages.push({
+        role: "tool",
+        content: toolCallResult,
+        tool_call_id: toolCall.id,
+      });
+    }
+
+    const finalResponse = await client.chat.completions.create({
+      messages,
+      model,
+      tools: [weatherToolDefinition],
+      tool_choice: "auto",
+    });
+    console.log("=== Final response ===\n");
+    console.log(
+      `Message: ${JSON.stringify(finalResponse.choices[0].message, null, 2)}`,
+    );
+    console.log(`Finish reason: ${finalResponse.choices[0].finish_reason}`);
+    console.log(`\nAnswer: ${finalResponse.choices[0].message.content ?? "(no text)"}`);
+  }
   // -------------------------------------------------------------------------
   // TODO 3: Если finish_reason — tool call ("tool_calls"):
   //         a) Добавить assistant message в `messages` как есть (там tool_calls).
@@ -151,7 +190,7 @@ async function runOpenAIToolLoop(question: string): Promise<void> {
   //         одного круга или двух вызовов tool для London + Tokyo.)
   // -------------------------------------------------------------------------
 
-  console.log("TODO: реализуйте цикл tool выше.");
+  // console.log("TODO: реализуйте цикл tool выше.");
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +235,8 @@ async function runAnthropicToolLoop(question: string): Promise<void> {
 }
 
 async function main() {
-  const question = "What's the weather like in London and Tokyo right now?";
+  const question =
+    "What's the weather like in London and New York right now in Fahrenheit?";
 
   // OpenAI-совместимый путь (также ollama / lmstudio / nvidia)
   await runOpenAIToolLoop(question);
